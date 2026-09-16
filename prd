@@ -1,0 +1,184 @@
+PRD
+
+PRD — The Lenny Growth Assistant
+1. User
+Primary user: An internal product/growth team member (PM, growth marketer, or founder) at a
+company that follows Lenny’s Podcast for tactical guidance, who needs quick, trustworthy answers to
+product and growth questions without re-listening to hours of episodes.
+Secondary user: The technical evaluator assessing this take-home — needs to understand, run, and
+verify the system quickly (this shapes several product decisions below: visible provider indicator, visible
+sources, health endpoints).
+2. Problem
+Lenny’s Podcast contains hundreds of hours of high-quality product/growth advice, but it’s locked in
+unstructured audio/transcript form. Teams currently either don’t use this knowledge at all, or waste time
+manually searching transcripts / re-listening to find the one relevant segment. There’s no way to ask a
+direct question and get a grounded, sourced answer, let alone turn that answer into a polished piece of
+written content.
+3. User Jobs-to-be-Done
+“When I’m making a product/growth decision, I want to quickly check what respected practitioners
+have said about this exact situation, so I can borrow their reasoning instead of guessing.”
+“When I find a good insight, I want to turn it into a shareable written artifact (essay, doc) without
+doing the writing from scratch.”
+“When I get an answer, I want to know it’s actually grounded in something real, not the model
+making it up.”
+4. Pain Points Removed
+No efficient way to search/query podcast transcripts today.
+Risk of misremembering or misattributing advice.
+Time cost of turning a good insight into publishable writing.
+No visibility into why an AI assistant said what it said (source opacity).
+5. Success Metrics
+Primary (product): ≥90% of answered questions include at least one verifiable transcript citation
+(measures grounding, not just fluency).
+Secondary (operational): Fewer than 5% of chat requests result in an unhandled error (timeout,
+provider failure, DB failure) reaching the user as a raw stack trace — measures resilience per §5 of
+the assignment.
+Tertiary (content quality): Generated Ship 30 for 30 essays land within 1,150–1,350 words
+(≈1,250 target) with zero unsupported factual claims flagged in manual review.
+6. Assumptions
+(Documented because the client brief — the take-home assignment — was intentionally underspecified in
+these areas.)
+1. Agent framework: Assignment allows Claude Agent SDK or Pi Coding Agent. We use the Claude
+
+Agent SDK / tool-use pattern, chosen for documentation maturity and because it pairs naturally
+with Claude as the cloud provider.
+2. Cloud LLM provider: Default is Anthropic Claude, with the provider abstraction built so OpenAI
+(or others) can be added without touching call sites.
+3. Local model: We target a small-to-mid Ollama model (e.g., llama3.1:8b class) sized to run on a
+typical developer laptop, acknowledging lower quality than the cloud model — documented as a
+trade-off, not hidden.
+4. “User metadata”: Since there’s no auth system specified, we treat this as a lightweight,
+anonymous per-browser client identifier (not PII), stored alongside sessions — sufficient for
+demo/evaluation purposes, explicitly not production-grade auth.
+5. Database hosting: Default is local Postgres via Docker Compose for one-command
+reproducibility; Supabase/Railway documented as optional per the assignment’s “may use.”
+6. Conversation history: Not explicitly mandatory, but included (a session sidebar) since it’s a normal
+expectation of “start a new chat” language in §3.1.
+
+7. Transcript repository structure: We assume the linked GitHub repo ( ChatPRD/lennys-podcast-
+transcripts ) contains per-episode text/markdown transcript files; ingestion code is written
+
+defensively and documented as needing a first-run verification against the actual repo contents,
+since this sandbox cannot fetch it directly.
+7. Scope (In)
+Grounded Q&A over Lenny’s transcripts (RAG), with citations.
+Follow-up question handling within a session.
+Ship 30 for 30 essay generation skill.
+Markdown + HTML/CSS artifact generation with in-app Artifact Viewer.
+Session + message persistence in PostgreSQL.
+Cloud (Claude) + local (Ollama) provider switching via config.
+Docker Compose one-command startup.
+Structured logging and graceful degradation for the failure modes listed in §5 of the assignment.
+8. Scope (Out)
+User authentication/accounts — out of scope; anonymous sessions only. Why: not requested,
+and would add significant surface area (auth flows, password storage, security review) without
+serving the evaluation goal.
+Multi-tenant / team workspaces — out of scope. Why: single-user demo product per the
+assignment framing.
+Fine-tuning or training custom models — out of scope. Why: assignment specifies provider
+integration, not model training.
+Full production-grade vector database (e.g., managed pgvector cluster) — out of scope; we
+use a lightweight local vector index. Why: prioritizes one-command reproducibility over retrieval
+sophistication; documented as an upgrade path.
+Real-time transcript refresh/webhooks — out of scope; ingestion is a manual/scripted re-run.
+Why: transcripts don’t change frequently enough to justify streaming ingestion infrastructure for a
+demo.
+9. User Flows
+1. New session → grounded question: User opens app → new session auto-created → asks a
+product/growth question → assistant retrieves relevant transcript chunks → answers with inline
+source citations → user asks a follow-up → context preserved.
+2. Unsupported question: User asks something transcripts don’t cover → assistant explicitly states
+the knowledge base doesn’t support an answer, rather than inventing one.
+3. Ship 30 essay generation: User asks for an essay on a topic discussed in the transcripts → Ship30
+skill retrieves grounded material → generates ~1,250-word essay with
+hook/headings/bullets/takeaway → renders as a Markdown artifact in the Artifact Viewer.
+4. HTML artifact generation: User asks for a rendered snippet (e.g., a one-pager) → assistant
+generates sanitized HTML/CSS → Artifact Viewer renders it in a sandboxed iframe beside the chat.
+
+5. Provider switch: Evaluator changes MODEL_PROVIDER env var from claude to ollama , restarts → UI
+provider indicator updates → same flows work against the local model.
+6. Failure path: Ollama is stopped / DB is down / API key missing → user gets a clear, non-technical
+error message; app doesn’t crash; logs capture the real cause.
+10. Acceptance Criteria
+A new chat session can be created and maintains isolated context from other sessions.
+At least 90% of grounded answers (manual sample of 10 questions) include a specific, verifiable
+transcript source.
+Asking a question outside the knowledge base produces an explicit “not supported” response, not a
+fabricated answer.
+Ship 30 essay output is within the target word range and includes headings, bullets, bold emphasis,
+and a stated takeaway.
+Markdown and HTML artifacts render inside the Artifact Viewer without navigating away from the
+app.
+Injected <script> content in a generated/user-influenced HTML artifact does not execute in the
+viewer.
+Switching MODEL_PROVIDER between claude and ollama requires no code change and is reflected in
+the UI/config.
+Stopping Postgres, stopping Ollama, or removing the API key each produce a graceful,
+understandable error rather than a crash or raw stack trace.
+docker compose up --build brings up a working system on a clean checkout (Ollama model pull
+remains a manual step, documented).
+11. Risks
+Risk Likelihood Impact Mitigation
+Hallucination despite RAG Medium High Hard system-prompt
+constraint + explicit “not
+supported” branch when
+retrieval
+confidence/relevance is low
+
+Local model (Ollama) quality
+gap vs. cloud
+
+High Medium Documented openly in
+README/demo; not hidden
+from evaluator
+
+Latency from RAG + agent
+routing + cloud calls
+
+Medium Medium Async I/O, timeouts with
+graceful fallback, streaming
+responses where feasible
+
+Cost from cloud LLM calls
+during development/demo
+
+Low Low Local Ollama as default dev
+path; cloud used selectively
+
+Data leakage via generated
+HTML/artifacts
+
+Medium High Sandboxed iframe, no same-
+origin execution, strict
+
+sanitization documented in
+architecture.md
+
+Transcript repo structure
+differs from assumption
+
+Medium Medium Defensive ingestion code +
+first-run verification step
+documented for the user
+
+Due date (15/09/26) has
+already passed relative to
+build date
+
+N/A High (process) Flagged directly to the
+requester; does not change
+engineering approach
+
+12. Trade-offs
+Simplicity over infra sophistication: local vector index instead of managed vector DB — faster to
+stand up, easier for an evaluator to run in one command, at the cost of retrieval scale/quality ceiling.
+Explicit refusal over confident guessing: the assistant will say “I don’t have that in the
+transcripts” rather than blend model knowledge with retrieved knowledge — reduces perceived
+helpfulness in edge cases but directly serves the “avoid hallucination” requirement.
+Iframe sandboxing over rich HTML features: artifact viewer blocks scripts by default — safer,
+but generated HTML artifacts can’t be interactive (no JS execution) unless a future iteration adds a
+
+vetted allowlist.
+13. Implementation Plan
+See architecture.md for full technical detail. Summary sequence: Backend skeleton (FastAPI, sessions,
+DB) → Ingestion/RAG → Agent + skills (grounded Q&A, Ship30, artifacts) → Frontend (chat + Artifact
+Viewer) → Docker Compose + config/fallback → Tests → Documentation
